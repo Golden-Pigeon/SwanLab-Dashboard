@@ -3,8 +3,10 @@
   <div class="w-full" ref="wrapper">
     <!-- 表格 -->
     <div
+      class="expr-table"
       :class="{ 'gradient-last-line': lastRowGradient, 'table-border': tableBorder }"
       :style="{ width: typeof tableWidth === 'string' ? tableWidth : `${tableWidth}px` }"
+      :data-active-col="activeColumnIndex"
       ref="table"
     >
       <!-- 表头 -->
@@ -14,8 +16,7 @@
           <div
             v-for="(item, index) in column"
             :key="item.key"
-            class="cell table-header-item"
-            :class="activeColumnIndex === index ? 'bg-highest' : 'bg-higher'"
+            class="cell table-header-item bg-higher"
             @mouseover="handleMouseOver(index)"
             @mouseout="handleMouseOver(-1)"
             :style="{ width: elementWidths[index] }"
@@ -49,12 +50,8 @@
           v-for="(item, index) in column"
           :key="item.key"
           :title="dataColumn[item.key]"
-          class="cell flex items-center px-2 py-3"
-          :class="[
-            item.style,
-            { 'hover:bg-primary-dimmest': resizeIndex === -1 },
-            activeColumnIndex === index ? 'bg-higher' : 'bg-default'
-          ]"
+          class="cell flex items-center px-2 py-3 bg-default"
+          :class="[item.style, { 'hover:bg-primary-dimmest': resizeIndex === -1 }]"
           @mouseover="handleMouseOver(index)"
           @mouseout="handleMouseOver(-1)"
           :style="{ width: elementWidths[index] }"
@@ -193,6 +190,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleTableWith)
+  if (hoverRaf !== null) cancelAnimationFrame(hoverRaf)
 })
 
 /**
@@ -282,8 +280,17 @@ const handleMouseup = () => {
 }
 
 // ---------------------------------- 处理鼠标移入移出事件，设置颜色 ----------------------------------
+// rAF 节流：鼠标快速移动时把多次 mouseover 合并为每帧一次列高亮更新，
+// 避免每个 mousemove 都触发一次整表样式重算（大列表下会打满渲染进程）。
+let hoverRaf = null
+let pendingColumnIndex = -1
 const handleMouseOver = (index) => {
-  hoverColumnIndex.value = index
+  pendingColumnIndex = index
+  if (hoverRaf !== null) return
+  hoverRaf = requestAnimationFrame(() => {
+    hoverRaf = null
+    hoverColumnIndex.value = pendingColumnIndex
+  })
 }
 </script>
 
@@ -360,5 +367,20 @@ const handleMouseOver = (index) => {
 
 .button-hover-tip {
   background-color: var(--foreground-dimmest);
+}
+
+// 整列高亮：由表根节点上唯一的响应式 [data-active-col] 驱动，浏览器用下面这些编译期静态规则
+// 完成整列上色，替代原先“每个单元格 :class 依赖 activeColumnIndex”的写法（原写法每次 hover
+// 都会让 Vue 对全表(行×列)所有单元格 :class 重新求值/打补丁，是大列表卡顿的根因）。
+$max-highlight-cols: 60;
+@for $i from 1 through $max-highlight-cols {
+  .expr-table[data-active-col='#{$i - 1}'] {
+    .table-header > .cell:nth-child(#{$i}) {
+      background-color: var(--background-highest);
+    }
+    .line > .cell:nth-child(#{$i}) {
+      background-color: var(--background-higher);
+    }
+  }
 }
 </style>
