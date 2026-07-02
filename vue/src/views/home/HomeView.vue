@@ -226,8 +226,11 @@ const onlySummary = ref(false)
 
 // 动态修改表头
 const tableHead = computed(() => {
+  // 默认精简视图：只保留关键几列（名称/状态/创建时间/时长）。
+  // config(数十列) 与 tag(325 指标列) 默认都不渲染——否则 397 行 × 数百列 ≈ 十几万个单元格，
+  // 鼠标命中测试/行 hover 重绘会拖垮渲染进程。勾选“只看总结”后再按需展开全部指标列。
   if (!onlySummary.value) {
-    return [...column.value, ...configs.value, ...(tags.value || [])]
+    return [...column.value]
   }
 
   return [column.value[0], ...tags.value]
