@@ -342,6 +342,10 @@ const handleMouseOver = (index) => {
 
 .line {
   @apply flex items-center;
+  // 行级虚拟化：让浏览器跳过视口外行的布局/绘制/命中测试，只处理可见的约 20 行。
+  // 行高固定 54px（见 .cell），用 contain-intrinsic-size 预留高度以保持滚动条长度与定位正确。
+  content-visibility: auto;
+  contain-intrinsic-size: auto 54px;
   &:hover {
     .cell:not(:hover) {
       background-color: var(--background-higher);
