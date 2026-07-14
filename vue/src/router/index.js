@@ -12,6 +12,11 @@ const routes = [
     component: () => import('@swanlab-vue/views/charts/ChartsView.vue')
   },
   {
+    path: '/group/:gid',
+    name: 'group',
+    component: () => import('@swanlab-vue/views/group/GroupChartsView.vue')
+  },
+  {
     path: '/experiment/:experimentId',
     name: 'experiment',
     component: () => import('@swanlab-vue/views/experiment/ExperimentView.vue'),

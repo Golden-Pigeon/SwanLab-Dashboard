@@ -13,7 +13,7 @@
 import MainLayout from './layouts/main/MainLayout.vue'
 import ErrorView from './views/error/ErrorView.vue'
 import http from './api/http'
-import { useProjectStore } from '@swanlab-vue/store'
+import { useProjectStore, useFastslStore } from '@swanlab-vue/store'
 import { computed } from 'vue'
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -25,7 +25,11 @@ import { onMounted } from 'vue'
 // ---------------------------------- state ----------------------------------
 
 const projectStore = useProjectStore()
+const fastslStore = useFastslStore()
 const ready = ref()
+
+// fastsl 别名/分组，独立加载、失败静默，不阻断项目信息
+fastslStore.load()
 
 // ---------------------------------- 在此处请求项目信息 ----------------------------------
 http
