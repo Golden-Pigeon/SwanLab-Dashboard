@@ -36,7 +36,7 @@
         <!-- 实验表格 -->
         <ExprTable sticky-header class="dashboard-table" :column="tableHead" :data="tableBody" last-row-gradient>
           <template v-slot:name="{ row }">
-            <ExperimentName :name="row.name" :id="row.id" :color="getExperimentColor(row)" />
+            <ExperimentName :name="row.name" :id="row.id" :run-id="row.run_id" :color="getExperimentColor(row)" />
           </template>
           <template v-slot:status="{ row }">
             <SLStatusLabel :name="row.name" :status="row.status" :url="'/experiment/' + row.id">
