@@ -1,7 +1,7 @@
 <template>
   <section class="w-screen h-screen overflow-x-clip">
     <!-- 侧边栏关闭/开启按钮 -->
-    <button class="close-button" ref="cbRef" @click="handleClose" v-if="showSideBar">
+    <button class="close-button" ref="cbRef" :style="closeButtonStyle" @click="handleClose" v-if="showSideBar">
       <SLIcon icon="sidebar" class="w-full h-full" />
     </button>
     <!-- 顶部header -->
@@ -15,12 +15,25 @@
         <div class="md:hidden sidebar-overlay" v-if="isSideBarShow" @click="handleClose"></div>
       </transition>
       <!-- 侧边栏 -->
-      <div class="sidebar-container bg-default" ref="sidebarRef" v-if="showSideBar">
-        <!-- 侧边栏规定宽度 -->
-        <div class="sidebar-content">
+      <div
+        class="sidebar-container bg-default"
+        :class="{ 'is-resizing': isResizing }"
+        ref="sidebarRef"
+        v-if="showSideBar"
+      >
+        <!-- 侧边栏规定宽度（可拖拽调整） -->
+        <div class="sidebar-content" :style="{ width: sidebarWidth + 'px' }">
           <SideBar />
         </div>
       </div>
+      <!-- 侧边栏宽度拖拽手柄（仅大屏、且侧边栏展开时可用） -->
+      <div
+        v-if="showSideBar && isSideBarShow"
+        class="sidebar-resizer hidden md:block"
+        :class="{ 'is-resizing': isResizing }"
+        :style="{ left: sidebarWidth + 'px' }"
+        @mousedown="startResize"
+      ></div>
       <!-- 右侧主要内容 -->
       <div class="main-content border-l" ref="containerRef">
         <slot></slot>
@@ -33,7 +46,7 @@
  * MainContentLayout - 页面布局，包含sidebar和右侧部分，用于展示页面内容
  * 右侧部分可以通过传入的props定义是否显示
  */
-import { ref, watch, onMounted, provide, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, provide, computed } from 'vue'
 import HeaderBar from './components/HeaderBar.vue'
 import SideBar from './components/SideBar.vue'
 import { useRoute } from 'vue-router'
@@ -57,9 +70,10 @@ const cbRef = ref(null)
  */
 const threshold = 768
 const isSmallScreen = ref(window.innerWidth < threshold)
-window.addEventListener('resize', () => {
+const handleWindowResize = () => {
   isSmallScreen.value = window.innerWidth < threshold
-})
+}
+window.addEventListener('resize', handleWindowResize)
 
 // 是否显示主布局的sideBar，可以监听，主要用于实现MainContent和MainHeader之间的交互动画
 const isSideBarShow = ref(!isSmallScreen.value)
@@ -91,6 +105,63 @@ const handleClose = () => {
 const sidebarRef = ref(null)
 const containerRef = ref(null)
 
+// ---------------------------------- 侧边栏宽度：可拖拽 + 本地持久化 ----------------------------------
+
+const MIN_SIDEBAR_WIDTH = 180
+const MAX_SIDEBAR_WIDTH = 640
+const DEFAULT_SIDEBAR_WIDTH = 288
+const SIDEBAR_WIDTH_KEY = 'fastsl-sidebar-width'
+
+const clampWidth = (w) => Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, w))
+
+const loadSidebarWidth = () => {
+  const stored = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY), 10)
+  return Number.isFinite(stored) ? clampWidth(stored) : DEFAULT_SIDEBAR_WIDTH
+}
+
+const sidebarWidth = ref(loadSidebarWidth())
+const isResizing = ref(false)
+let stopResize = null
+
+// 关闭按钮位置跟随侧边栏宽度（打开状态），24 为按钮尺寸，16 为右侧留白
+const closeButtonStyle = computed(() => ({
+  left: sidebarWidth.value - 24 - 16 + 'px'
+}))
+
+// 将当前宽度应用到侧边栏容器（仅在展开时）
+const applySidebarWidth = () => {
+  if (!props.showSideBar || !sidebarRef.value) return
+  if (isSideBarShow.value) sidebarRef.value.style.width = sidebarWidth.value + 'px'
+}
+
+const startResize = (e) => {
+  e.preventDefault()
+  isResizing.value = true
+  const startX = e.clientX
+  const startWidth = sidebarWidth.value
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+
+  const onMove = (ev) => {
+    sidebarWidth.value = clampWidth(startWidth + (ev.clientX - startX))
+  }
+  const onUp = () => {
+    isResizing.value = false
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth.value))
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    stopResize = null
+  }
+  stopResize = onUp
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
+// 宽度变化时实时同步到容器
+watch(sidebarWidth, applySidebarWidth)
+
 // ---------------------------------- 注册挂载钩子 ----------------------------------
 
 onMounted(() => {
@@ -100,11 +171,11 @@ onMounted(() => {
       if (!props.showSideBar) return
       // 显示
       if (val) {
-        sidebarRef.value.style = 'width: 288px;'
+        sidebarRef.value.style.width = sidebarWidth.value + 'px'
         cbRef.value.classList.remove('close-button-sidebar-close')
         cbRef.value.classList.add('close-button-sidebar-open')
       } else {
-        sidebarRef.value.style = 'width: 0;'
+        sidebarRef.value.style.width = '0'
         cbRef.value.classList.remove('close-button-sidebar-open')
         cbRef.value.classList.add('close-button-sidebar-close')
       }
@@ -126,6 +197,11 @@ watch(
     }
   }
 )
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWindowResize)
+  stopResize?.()
+})
+
 // ---------------------------------- 暴露对象 ----------------------------------
 
 defineExpose({
@@ -154,13 +230,33 @@ $main-content-height: calc(100vh - 56px);
   height: $main-content-height;
 }
 .main-container {
-  @apply w-screen flex  overflow-auto;
+  @apply relative w-screen flex  overflow-auto;
   height: $main-content-height;
 
   .main-content {
     @apply h-full w-full overflow-y-auto overflow-x-hidden;
     // 宽度变化
     transition: width $duration ease-in-out;
+  }
+}
+
+// 侧边栏宽度拖拽手柄
+.sidebar-resizer {
+  @apply absolute top-0 z-full h-full;
+  width: 6px;
+  // 让手柄居中骑在侧边栏与内容的分界线上
+  transform: translateX(-3px);
+  cursor: col-resize;
+
+  &::after {
+    content: '';
+    @apply absolute inset-y-0 left-1/2 w-px -translate-x-1/2;
+    background-color: transparent;
+    transition: background-color 150ms ease;
+  }
+  &:hover::after,
+  &.is-resizing::after {
+    background-color: var(--primary-default);
   }
 }
 
@@ -223,6 +319,10 @@ $main-content-height: calc(100vh - 56px);
   height: $main-content-height;
   // 宽度变化
   transition: width $duration ease-in-out;
+  // 拖拽调整宽度时关闭过渡，避免跟手延迟
+  &.is-resizing {
+    transition: none;
+  }
   // 将滚动条隐藏
   &::-webkit-scrollbar {
     display: none; /* 隐藏WebKit浏览器的滚动条 */
